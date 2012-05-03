@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module Control.Pipe.Zlib (
   gzip,
   gunzip,
@@ -7,16 +5,11 @@ module Control.Pipe.Zlib (
   compress
   ) where
 
--- adapted from conduit
-
 import Codec.Zlib
-import Control.Exception (SomeException)
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Class
 import Control.Pipe
 import Control.Pipe.Combinators
-import Control.Pipe.Exception
 import qualified Data.ByteString as B
 import Prelude hiding (catch)
 
@@ -33,14 +26,13 @@ decompress
     => WindowBits
     -> Pipe B.ByteString B.ByteString m ()
 decompress config = do
-    inf <- lift . liftIO $ initInflate config
+    inf <- liftIO $ initInflate config
     forP $ \x -> do
-      chunks <- lift . liftIO $ withInflateInput inf x callback
-      mapM_ yield chunks
+      popper <- liftIO $ feedInflate inf x
+      yieldPopper popper
 
-    chunk <- lift . liftIO $ finishInflate inf
-    unless (B.null chunk) $
-      yield chunk
+    chunk <- liftIO $ finishInflate inf
+    unless (B.null chunk) $ yield chunk
 
 compress
     :: MonadIO m
@@ -48,17 +40,17 @@ compress
     -> WindowBits
     -> Pipe B.ByteString B.ByteString m ()
 compress level config = do
-    def <- lift . liftIO $ initDeflate level config
+    def <- liftIO $ initDeflate level config
     forP $ \x -> do
-      chunks <- lift . liftIO $ withDeflateInput def x callback
-      mapM_ yield chunks
-    chunks <- lift . liftIO $ finishDeflate def callback
-    mapM_ yield chunks
+      popper <- liftIO $ feedDeflate def x
+      yieldPopper popper
 
-callback :: (Show a, MonadIO m) => m (Maybe a) -> m [a]
-callback pop = go id where
-  go xs = do
-    x <- pop
-    case x of
-      Nothing -> return $ xs []
-      Just y -> go (xs . (y:))
+    let popper = liftIO $ finishDeflate def
+    yieldPopper popper
+
+yieldPopper :: MonadIO m => Popper -> Pipe a B.ByteString m ()
+yieldPopper pop = do
+  x <- liftIO pop
+  case x of
+    Nothing -> return ()
+    Just chunk -> yield chunk >> yieldPopper pop
