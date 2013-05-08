@@ -30,9 +30,11 @@ import qualified Data.ByteString           as B
 import           Data.Traversable          (mapM)
 import           Prelude                   hiding (mapM)
 
+--------------------------------------------------------------------------------
+
 -- | Decompress bytes flowing downstream using the given 'Z.WindowBits'.
 --
--- See the "Codec.Compression.Zlib" module for details about these values.
+-- See the "Codec.Zlib" module for details about this values.
 decompressD
   :: P.Proxy p
   => Z.WindowBits
@@ -46,7 +48,7 @@ decompressD config () = P.runIdentityP . forever $ do
 
 -- | Compress bytes flowing downstream.
 --
--- See the "Codec.Compression.Zlib" module for details about these values.
+-- See the "Codec.Zlib" module for details about these values.
 compressD
   :: P.Proxy p
   => ZC.CompressionLevel
@@ -59,7 +61,6 @@ compressD level config () = P.runIdentityP loop where
         (P.unitD >-> fromPopperS popper) ()
         mapM P.respond =<< lift (Z.finishDeflate def)
     level' = fromCompressionLevel level
-
 
 --------------------------------------------------------------------------------
 
