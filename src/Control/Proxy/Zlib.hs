@@ -32,12 +32,12 @@ import           Prelude                   hiding (mapM)
 
 --------------------------------------------------------------------------------
 
--- | Decompress bytes flowing downstream using the given 'Z.WindowBits'.
+-- | Decompress bytes flowing downstream.
 --
--- See the "Codec.Zlib" module for details about this values.
+-- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
 decompressD
   :: P.Proxy p
-  => Z.WindowBits
+  => ZC.WindowBits
   -> () -> P.Pipe p B.ByteString B.ByteString IO r
 decompressD config () = P.runIdentityP . forever $ do
     inf <- lift (Z.initInflate config)
@@ -48,11 +48,12 @@ decompressD config () = P.runIdentityP . forever $ do
 
 -- | Compress bytes flowing downstream.
 --
--- See the "Codec.Zlib" module for details about these values.
+-- See the "Codec.Compression.Zlib" module for details about
+-- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
 compressD
   :: P.Proxy p
   => ZC.CompressionLevel
-  -> Z.WindowBits
+  -> ZC.WindowBits
   -> () -> P.Pipe p B.ByteString B.ByteString IO r
 compressD level config () = P.runIdentityP loop where
     loop = forever $ do
