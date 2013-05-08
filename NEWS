@@ -1,4 +1,4 @@
-# Version HEAD
+# Version 0.2.0.0
 
 * New backwards incompatible API.
 * Based on pipes-3.3 and zlib-bindings.
