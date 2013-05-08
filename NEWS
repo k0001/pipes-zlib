@@ -1,0 +1,8 @@
+# Version HEAD
+
+* New backwards incompatible API.
+* Based on pipes-3.3 and zlib-bindings.
+
+# Up to version 0.1.0
+
+* Based on pipes-core and zlib-bindings.
