@@ -1,10 +1,10 @@
 -- | This module exports utilities to compress and decompress @pipes@ streams
 -- using the zlib compression codec.
 
-module Control.Proxy.Zlib (
+module Pipes.Zlib (
   -- * Streams
-    decompressD
-  , compressD
+    decompress
+  , compress
 
   -- * Compression level
   -- $ccz-re-export
@@ -24,8 +24,7 @@ import qualified Codec.Zlib                as Z
 import qualified Codec.Compression.Zlib    as ZC
 import           Control.Monad             (forever, unless)
 import           Control.Monad.Trans.Class (lift)
-import           Control.Proxy             ((>->))
-import qualified Control.Proxy             as P
+import qualified Pipes                     as P
 import qualified Data.ByteString           as B
 import           Data.Traversable          (mapM)
 import           Prelude                   hiding (mapM)
@@ -35,14 +34,11 @@ import           Prelude                   hiding (mapM)
 -- | Decompress bytes flowing downstream.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
-decompressD
-  :: P.Proxy p
-  => ZC.WindowBits
-  -> () -> P.Pipe p B.ByteString B.ByteString IO r
-decompressD config () = P.runIdentityP . forever $ do
+decompress :: ZC.WindowBits -> () -> P.Pipe B.ByteString B.ByteString IO r
+decompress config () = forever $ do
     inf <- lift (Z.initInflate config)
     popper <- lift . Z.feedInflate inf =<< P.request ()
-    (P.unitD >-> fromPopperS popper) ()
+    fromPopper popper ()
     bs <- lift (Z.finishInflate inf)
     unless (B.null bs) $ P.respond bs
 
@@ -50,17 +46,16 @@ decompressD config () = P.runIdentityP . forever $ do
 --
 -- See the "Codec.Compression.Zlib" module for details about
 -- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
-compressD
-  :: P.Proxy p
-  => ZC.CompressionLevel
+compress
+  :: ZC.CompressionLevel
   -> ZC.WindowBits
-  -> () -> P.Pipe p B.ByteString B.ByteString IO r
-compressD level config () = P.runIdentityP loop where
-    loop = forever $ do
-        def <- lift (Z.initDeflate level' config)
-        popper <- lift . Z.feedDeflate def =<< P.request ()
-        (P.unitD >-> fromPopperS popper) ()
-        mapM P.respond =<< lift (Z.finishDeflate def)
+  -> () -> P.Pipe B.ByteString B.ByteString IO r
+compress level config () = forever $ do
+    def <- lift (Z.initDeflate level' config)
+    popper <- lift . Z.feedDeflate def =<< P.request ()
+    fromPopper popper ()
+    mapM P.respond =<< lift (Z.finishDeflate def)
+  where
     level' = fromCompressionLevel level
 
 --------------------------------------------------------------------------------
@@ -74,13 +69,14 @@ compressD level config () = P.runIdentityP loop where
 -- Internal stuff
 
 -- | Produce values from the given 'Z.Poppler' until exhausted.
-fromPopperS :: P.Proxy p => Z.Popper -> () -> P.Producer p B.ByteString IO ()
-fromPopperS pop () = P.runIdentityP loop where
+fromPopper :: Z.Popper -> () -> P.Producer B.ByteString IO ()
+fromPopper pop () = loop
+  where
     loop = do
         mbs <- lift pop
         case mbs of
-          Nothing -> return ()
-          Just bs -> P.respond bs >> loop
+            Nothing -> return ()
+            Just bs -> P.respond bs >> loop
 
 -- We need this function until the @zlib@ library hides the
 -- 'ZC.CompressionLevel' constructors in future version 0.7.
