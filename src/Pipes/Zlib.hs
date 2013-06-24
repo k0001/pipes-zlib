@@ -39,7 +39,7 @@ import           Prelude                   hiding (mapM)
 decompress :: ZC.WindowBits -> () -> P.Pipe B.ByteString B.ByteString IO r
 decompress config () = forever $ do
     inf <- lift (Z.initInflate config)
-    popper <- lift . Z.feedInflate inf =<< P.request ()
+    popper <- lift . Z.feedInflate inf =<< requestNonEmpty
     fromPopper popper ()
     bs <- lift (Z.finishInflate inf)
     unless (B.null bs) $ P.respond bs
@@ -54,7 +54,7 @@ compress
   -> () -> P.Pipe B.ByteString B.ByteString IO r
 compress level config () = forever $ do
     def <- lift (Z.initDeflate level' config)
-    popper <- lift . Z.feedDeflate def =<< P.request ()
+    popper <- lift . Z.feedDeflate def =<< requestNonEmpty
     fromPopper popper ()
     mapM P.respond =<< lift (Z.finishDeflate def)
   where
@@ -69,6 +69,16 @@ compress level config () = forever $ do
 
 --------------------------------------------------------------------------------
 -- Internal stuff
+
+requestNonEmpty :: Monad m => P.Consumer B.ByteString m B.ByteString
+requestNonEmpty = loop
+  where
+    loop = do
+        bs <- P.request ()
+        if B.null bs
+            then loop
+            else return bs
+{-# INLINE requestNonEmpty #-}
 
 -- | Produce values from the given 'Z.Poppler' until exhausted.
 fromPopper :: Z.Popper -> () -> P.Producer B.ByteString IO ()
