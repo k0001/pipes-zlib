@@ -24,9 +24,8 @@ module Pipes.Zlib (
 
 import qualified Codec.Zlib                as Z
 import qualified Codec.Compression.Zlib    as ZC
-import           Control.Monad             (forever, unless)
-import           Control.Monad.Trans.Class (lift)
-import qualified Pipes                     as P
+import           Control.Monad             (unless)
+import           Pipes
 import qualified Data.ByteString           as B
 import           Data.Traversable          (mapM)
 import           Prelude                   hiding (mapM)
@@ -36,13 +35,13 @@ import           Prelude                   hiding (mapM)
 -- | Decompress bytes flowing downstream.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
-decompress :: ZC.WindowBits -> () -> P.Pipe B.ByteString B.ByteString IO r
+decompress :: ZC.WindowBits -> () -> Pipe B.ByteString B.ByteString IO r
 decompress config () = forever $ do
     inf <- lift (Z.initInflate config)
     popper <- lift . Z.feedInflate inf =<< requestNonEmpty
     fromPopper popper ()
     bs <- lift (Z.finishInflate inf)
-    unless (B.null bs) $ P.respond bs
+    unless (B.null bs) $ respond bs
 
 -- | Compress bytes flowing downstream.
 --
@@ -51,12 +50,12 @@ decompress config () = forever $ do
 compress
   :: ZC.CompressionLevel
   -> ZC.WindowBits
-  -> () -> P.Pipe B.ByteString B.ByteString IO r
+  -> () -> Pipe B.ByteString B.ByteString IO r
 compress level config () = forever $ do
     def <- lift (Z.initDeflate level' config)
     popper <- lift . Z.feedDeflate def =<< requestNonEmpty
     fromPopper popper ()
-    mapM P.respond =<< lift (Z.finishDeflate def)
+    mapM respond =<< lift (Z.finishDeflate def)
   where
     level' = fromCompressionLevel level
 
@@ -70,25 +69,25 @@ compress level config () = forever $ do
 --------------------------------------------------------------------------------
 -- Internal stuff
 
-requestNonEmpty :: Monad m => P.Consumer B.ByteString m B.ByteString
+requestNonEmpty :: Monad m => Consumer B.ByteString m B.ByteString
 requestNonEmpty = loop
   where
     loop = do
-        bs <- P.request ()
+        bs <- request ()
         if B.null bs
             then loop
             else return bs
 {-# INLINE requestNonEmpty #-}
 
 -- | Produce values from the given 'Z.Poppler' until exhausted.
-fromPopper :: Z.Popper -> () -> P.Producer B.ByteString IO ()
+fromPopper :: Z.Popper -> () -> Producer B.ByteString IO ()
 fromPopper pop () = loop
   where
     loop = do
         mbs <- lift pop
         case mbs of
             Nothing -> return ()
-            Just bs -> P.respond bs >> loop
+            Just bs -> respond bs >> loop
 
 -- We need this function until the @zlib@ library hides the
 -- 'ZC.CompressionLevel' constructors in future version 0.7.
