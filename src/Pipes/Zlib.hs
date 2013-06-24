@@ -39,7 +39,7 @@ decompress :: ZC.WindowBits -> () -> Pipe B.ByteString B.ByteString IO r
 decompress config () = forever $ do
     inf <- lift $ Z.initInflate config
     popper <- lift . Z.feedInflate inf =<< requestNonEmpty
-    fromPopper popper ()
+    fromPopper popper
     bs <- lift $ Z.finishInflate inf
     unless (B.null bs) $ respond bs
 
@@ -54,7 +54,7 @@ compress
 compress level config () = forever $ do
     def <- lift $ Z.initDeflate (fromCompressionLevel level) config
     popper <- lift . Z.feedDeflate def =<< requestNonEmpty
-    fromPopper popper ()
+    fromPopper popper
     mapM respond =<< lift (Z.finishDeflate def)
 
 --------------------------------------------------------------------------------
@@ -78,8 +78,8 @@ requestNonEmpty = loop
 {-# INLINE requestNonEmpty #-}
 
 -- | Produce values from the given 'Z.Poppler' until exhausted.
-fromPopper :: Z.Popper -> () -> Producer B.ByteString IO ()
-fromPopper pop () = loop
+fromPopper :: Z.Popper -> Producer B.ByteString IO ()
+fromPopper pop = loop
   where
     loop = do
         mbs <- lift pop
