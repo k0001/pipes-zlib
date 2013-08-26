@@ -35,8 +35,8 @@ import           Prelude                   hiding (mapM)
 -- | Decompress bytes flowing downstream.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
-decompress :: ZC.WindowBits -> () -> Pipe B.ByteString B.ByteString IO r
-decompress config () = forever $ do
+decompress :: ZC.WindowBits -> Pipe B.ByteString B.ByteString IO r
+decompress config = forever $ do
     inf <- lift $ Z.initInflate config
     popper <- lift . Z.feedInflate inf =<< requestNonEmpty
     fromPopper popper
@@ -50,8 +50,8 @@ decompress config () = forever $ do
 compress
   :: ZC.CompressionLevel
   -> ZC.WindowBits
-  -> () -> Pipe B.ByteString B.ByteString IO r
-compress level config () = forever $ do
+  -> Pipe B.ByteString B.ByteString IO r
+compress level config = forever $ do
     def <- lift $ Z.initDeflate (fromCompressionLevel level) config
     popper <- lift . Z.feedDeflate def =<< requestNonEmpty
     fromPopper popper
