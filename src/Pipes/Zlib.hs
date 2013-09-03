@@ -24,38 +24,44 @@ module Pipes.Zlib (
 
 import qualified Codec.Zlib                as Z
 import qualified Codec.Compression.Zlib    as ZC
-import           Control.Monad             (unless)
+import           Control.Monad             (forever)
 import           Pipes
 import qualified Data.ByteString           as B
-import           Data.Traversable          (mapM)
-import           Prelude                   hiding (mapM)
 
 --------------------------------------------------------------------------------
 
 -- | Decompress bytes flowing downstream.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
-decompress :: ZC.WindowBits -> () -> Pipe B.ByteString B.ByteString IO r
-decompress config () = forever $ do
-    inf <- lift $ Z.initInflate config
-    popper <- lift . Z.feedInflate inf =<< requestNonEmpty
+decompress :: MonadIO m => ZC.WindowBits -> Pipe B.ByteString B.ByteString m r
+decompress config = forever $ do
+    inf <- liftIO (Z.initInflate config)
+    a <- requestNonEmpty
+    popper <- liftIO (Z.feedInflate inf a)
     fromPopper popper
-    bs <- lift $ Z.finishInflate inf
-    unless (B.null bs) $ respond bs
+    bs <- liftIO (Z.finishInflate inf)
+    if B.null bs
+        then yield bs
+        else return ()
 
 -- | Compress bytes flowing downstream.
 --
 -- See the "Codec.Compression.Zlib" module for details about
 -- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
 compress
-  :: ZC.CompressionLevel
-  -> ZC.WindowBits
-  -> () -> Pipe B.ByteString B.ByteString IO r
-compress level config () = forever $ do
-    def <- lift $ Z.initDeflate (fromCompressionLevel level) config
-    popper <- lift . Z.feedDeflate def =<< requestNonEmpty
+  :: MonadIO m
+  => ZC.CompressionLevel -> ZC.WindowBits -> Pipe B.ByteString B.ByteString m r
+compress level config = forever $ do
+    def <- liftIO (Z.initDeflate level' config)
+    a <- requestNonEmpty
+    popper <- liftIO (Z.feedDeflate def a)
     fromPopper popper
-    mapM respond =<< lift (Z.finishDeflate def)
+    mbs <- liftIO (Z.finishDeflate def)
+    case mbs of
+        Just bs -> yield bs
+        Nothing -> return ()
+  where
+    level' = fromCompressionLevel level
 
 --------------------------------------------------------------------------------
 
@@ -67,25 +73,25 @@ compress level config () = forever $ do
 --------------------------------------------------------------------------------
 -- Internal stuff
 
-requestNonEmpty :: Monad m => Consumer B.ByteString m B.ByteString
+requestNonEmpty :: Monad m => Consumer' B.ByteString m B.ByteString
 requestNonEmpty = loop
   where
     loop = do
-        bs <- request ()
+        bs <- await
         if B.null bs
             then loop
             else return bs
 {-# INLINE requestNonEmpty #-}
 
 -- | Produce values from the given 'Z.Poppler' until exhausted.
-fromPopper :: Z.Popper -> Producer B.ByteString IO ()
+fromPopper :: MonadIO m => Z.Popper -> Producer' B.ByteString m ()
 fromPopper pop = loop
   where
     loop = do
-        mbs <- lift pop
+        mbs <- liftIO pop
         case mbs of
             Nothing -> return ()
-            Just bs -> respond bs >> loop
+            Just bs -> yield bs >> loop
 
 -- We need this function until the @zlib@ library hides the
 -- 'ZC.CompressionLevel' constructors in future version 0.7.
