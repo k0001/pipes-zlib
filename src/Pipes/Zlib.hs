@@ -43,6 +43,7 @@ decompress config = forever $ do
     if B.null bs
         then yield bs
         else return ()
+{-# INLINABLE decompress #-}
 
 -- | Compress bytes flowing downstream.
 --
@@ -62,6 +63,7 @@ compress level config = forever $ do
         Nothing -> return ()
   where
     level' = fromCompressionLevel level
+{-# INLINABLE compress #-}
 
 --------------------------------------------------------------------------------
 
@@ -92,6 +94,7 @@ fromPopper pop = loop
         case mbs of
             Nothing -> return ()
             Just bs -> yield bs >> loop
+{-# INLINABLE fromPopper #-}
 
 -- We need this function until the @zlib@ library hides the
 -- 'ZC.CompressionLevel' constructors in future version 0.7.
