@@ -36,7 +36,7 @@ import qualified Data.ByteString           as B
 decompress :: MonadIO m => ZC.WindowBits -> Pipe B.ByteString B.ByteString m r
 decompress config = forever $ do
     inf <- liftIO (Z.initInflate config)
-    a <- requestNonEmpty
+    a <- awaitNonEmpty
     popper <- liftIO (Z.feedInflate inf a)
     fromPopper popper
     bs <- liftIO (Z.finishInflate inf)
@@ -54,7 +54,7 @@ compress
   => ZC.CompressionLevel -> ZC.WindowBits -> Pipe B.ByteString B.ByteString m r
 compress level config = forever $ do
     def <- liftIO (Z.initDeflate level' config)
-    a <- requestNonEmpty
+    a <- awaitNonEmpty
     popper <- liftIO (Z.feedDeflate def a)
     fromPopper popper
     mbs <- liftIO (Z.finishDeflate def)
@@ -75,15 +75,15 @@ compress level config = forever $ do
 --------------------------------------------------------------------------------
 -- Internal stuff
 
-requestNonEmpty :: Monad m => Consumer' B.ByteString m B.ByteString
-requestNonEmpty = loop
+awaitNonEmpty :: Monad m => Consumer' B.ByteString m B.ByteString
+awaitNonEmpty = loop
   where
     loop = do
         bs <- await
         if B.null bs
             then loop
             else return bs
-{-# INLINE requestNonEmpty #-}
+{-# INLINABLE awaitNonEmpty #-}
 
 -- | Produce values from the given 'Z.Poppler' until exhausted.
 fromPopper :: MonadIO m => Z.Popper -> Producer' B.ByteString m ()
