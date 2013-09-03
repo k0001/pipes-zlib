@@ -1,7 +1,17 @@
+# Version HEAD
+
+* Upgraded to work with pipes-4.0.0, creating a new backwards
+  incompatible API.
+
+* Generalize base `IO` monad to `MonadIO`.
+
+
 # Version 0.2.0.0
 
 * New backwards incompatible API.
+
 * Based on pipes-3.3 and zlib-bindings.
+
 
 # Up to version 0.1.0
 
