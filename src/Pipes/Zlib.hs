@@ -41,8 +41,8 @@ decompress config = forever $ do
     fromPopper popper
     bs <- liftIO (Z.finishInflate inf)
     if B.null bs
-        then yield bs
-        else return ()
+        then return ()
+        else yield bs
 {-# INLINABLE decompress #-}
 
 -- | Compress bytes flowing downstream.
