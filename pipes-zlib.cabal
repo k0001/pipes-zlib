@@ -11,8 +11,8 @@ homepage:           https://github.com/k0001/pipes-zlib
 bug-reports:        https://github.com/k0001/pipes-zlib/issues
 category:           Pipes, Compression
 build-type:         Simple
-synopsis:           Pipes to deal with zlib compressed data.
-description:        Pipes to deal with zlib compressed data.
+synopsis:           Zlib compression and decompression for Pipes streams
+description:        Zlib compression and decompression for Pipes streams
 cabal-version:      >=1.8
 extra-source-files: README.md PEOPLE
 
