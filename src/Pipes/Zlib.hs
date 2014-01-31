@@ -1,5 +1,3 @@
-{-# LANGUAGE RankNTypes #-}
-
 -- | This module exports utilities to compress and decompress @pipes@ streams
 -- using the zlib compression codec.
 
