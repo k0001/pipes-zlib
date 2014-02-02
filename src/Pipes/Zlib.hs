@@ -24,7 +24,7 @@ module Pipes.Zlib (
 
 import qualified Codec.Zlib                as Z
 import qualified Codec.Compression.Zlib    as ZC
-import           Control.Monad             (forever, unless)
+import           Control.Monad             (unless)
 import           Pipes
 import qualified Data.ByteString           as B
 import           Pipes.Lift                (evalStateP)
@@ -73,15 +73,10 @@ decompressParser
   -> Producer B.ByteString (StateT (Producer B.ByteString m r) m) r
 decompressParser config = do
     inf <- liftIO $ Z.initInflate config
-    r <- input >-> inflate inf
+    r <- for input $ \bs -> liftIO (Z.feedInflate inf bs) >>= fromPopper
     bs <- liftIO $ Z.finishInflate inf
     unless (B.null bs) $ yield bs
     return r
-  where
-    inflate inf = forever $ do
-      bs <- await
-      popper <- liftIO $ Z.feedInflate inf bs
-      fromPopper popper
 {-# INLINABLE decompressParser #-}
 
 -- | Parser to compress a 'Producer'
@@ -92,7 +87,7 @@ compressParser
   -> Producer B.ByteString (StateT (Producer B.ByteString m r) m) r
 compressParser level config = do
     def <- liftIO $ Z.initDeflate level' config
-    r <- input >-> deflate def
+    r <- for input $ \bs -> liftIO (Z.feedDeflate def bs) >>= fromPopper
     mbs <- liftIO $ Z.finishDeflate def
     case mbs of
       Just bs -> yield bs
@@ -100,10 +95,6 @@ compressParser level config = do
     return r
   where
     level' = fromCompressionLevel level
-    deflate def = forever $ do
-      bs <- await
-      popper <- liftIO $ Z.feedDeflate def bs
-      fromPopper popper
 {-# INLINABLE compressParser #-}
 
 -- | Produce values from the given 'Z.Popper' until exhausted.
