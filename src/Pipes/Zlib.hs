@@ -22,27 +22,34 @@ module Pipes.Zlib (
   , ZC.windowBits
   ) where
 
-import qualified Codec.Zlib                as Z
 import qualified Codec.Compression.Zlib    as ZC
+import qualified Codec.Zlib                as Z
 import           Control.Monad             (unless)
-import           Pipes
 import qualified Data.ByteString           as B
-import           Pipes.Lift                (evalStateP)
-import           Pipes.Parse
+import           Pipes
 
 --------------------------------------------------------------------------------
 
--- | Decompress bytes flowing downstream.
+-- | Decompress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
-decompress :: MonadIO m
-           => ZC.WindowBits
-           -> Producer B.ByteString m r
-           -> Producer B.ByteString m r
-decompress config producer = evalStateP producer $ decompressParser config
+decompress
+  :: MonadIO m
+  => ZC.WindowBits
+  -> Producer' B.ByteString m r -- ^ Compressed stream
+  -> Producer' B.ByteString m r -- ^ Decompressed stream
+decompress wbits p0 = do
+    inf <- liftIO $ Z.initInflate wbits
+    r <- for p0 $ \bs -> do
+       popper <- liftIO (Z.feedInflate inf bs)
+       fromPopper popper
+    bs <- liftIO $ Z.finishInflate inf
+    unless (B.null bs) (yield bs)
+    return r
 {-# INLINABLE decompress #-}
 
--- | Compress bytes flowing downstream.
+
+-- | Compress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about
 -- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
@@ -50,10 +57,18 @@ compress
   :: MonadIO m
   => ZC.CompressionLevel
   -> ZC.WindowBits
-  -> Producer B.ByteString m r
-  -> Producer B.ByteString m r
-compress level config producer = evalStateP producer $
-                                   compressParser level config
+  -> Producer' B.ByteString m r -- ^ Decompressed stream
+  -> Producer' B.ByteString m r -- ^ Compressed stream
+compress clevel wbits p0 = do
+    def <- liftIO $ Z.initDeflate (fromCompressionLevel clevel) wbits
+    r <- for p0 $ \bs -> do
+       popper <- liftIO (Z.feedDeflate def bs)
+       fromPopper popper
+    mbs <- liftIO $ Z.finishDeflate def
+    case mbs of
+       Just bs -> yield bs
+       Nothing -> return ()
+    return r
 {-# INLINABLE compress #-}
 
 --------------------------------------------------------------------------------
@@ -66,46 +81,14 @@ compress level config producer = evalStateP producer $
 --------------------------------------------------------------------------------
 -- Internal stuff
 
--- | Parser to decompress a 'Producer'
-decompressParser
-  :: MonadIO m
-  => ZC.WindowBits
-  -> Producer B.ByteString (StateT (Producer B.ByteString m r) m) r
-decompressParser config = do
-    inf <- liftIO $ Z.initInflate config
-    r <- for input $ \bs -> liftIO (Z.feedInflate inf bs) >>= fromPopper
-    bs <- liftIO $ Z.finishInflate inf
-    unless (B.null bs) $ yield bs
-    return r
-{-# INLINABLE decompressParser #-}
-
--- | Parser to compress a 'Producer'
-compressParser
-  :: MonadIO m
-  => ZC.CompressionLevel
-  -> ZC.WindowBits
-  -> Producer B.ByteString (StateT (Producer B.ByteString m r) m) r
-compressParser level config = do
-    def <- liftIO $ Z.initDeflate level' config
-    r <- for input $ \bs -> liftIO (Z.feedDeflate def bs) >>= fromPopper
-    mbs <- liftIO $ Z.finishDeflate def
-    case mbs of
-      Just bs -> yield bs
-      Nothing -> return ()
-    return r
-  where
-    level' = fromCompressionLevel level
-{-# INLINABLE compressParser #-}
-
 -- | Produce values from the given 'Z.Popper' until exhausted.
 fromPopper :: MonadIO m => Z.Popper -> Producer' B.ByteString m ()
-fromPopper pop = loop
-  where
+fromPopper pop = loop where
     loop = do
-        mbs <- liftIO pop
-        case mbs of
-            Nothing -> return ()
-            Just bs -> yield bs >> loop
+      mbs <- liftIO pop
+      case mbs of
+         Nothing -> return ()
+         Just bs -> yield bs >> loop
 {-# INLINABLE fromPopper #-}
 
 -- We need this function until the @zlib@ library hides the
