@@ -14,7 +14,7 @@ build-type:         Simple
 synopsis:           Zlib compression and decompression for Pipes streams
 description:        Zlib compression and decompression for Pipes streams
 cabal-version:      >=1.8
-extra-source-files: README.md PEOPLE
+extra-source-files: README.md PEOPLE changelog
 
 source-repository head
     type: git

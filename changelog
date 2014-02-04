@@ -1,4 +1,9 @@
-# Version HEAD
+# Version 0.3.1
+
+* Dependency upper bounds.
+
+
+# Version 0.3.0
 
 * Upgraded to work with pipes-4.0.0, creating a new backwards
   incompatible API.
