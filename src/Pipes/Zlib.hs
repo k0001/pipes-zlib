@@ -25,6 +25,7 @@ module Pipes.Zlib (
 import qualified Codec.Zlib                as Z
 import qualified Codec.Compression.Zlib    as ZC
 import           Control.Monad             (unless)
+import           Data.Functor.Constant     (Constant(Constant, getConstant))
 import           Data.Foldable             (forM_)
 import           Pipes
 import qualified Data.ByteString           as B
@@ -37,9 +38,44 @@ import qualified Data.ByteString           as B
 decompress
   :: MonadIO m
   => ZC.WindowBits
+  -> Producer B.ByteString m r
+  -> Producer B.ByteString m r
+decompress config producer = producer ^. decompressLens config
+{-# INLINABLE decompress #-}
+
+-- | Compress bytes flowing downstream.
+--
+-- See the "Codec.Compression.Zlib" module for details about
+-- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
+compress
+  :: MonadIO m
+  => ZC.CompressionLevel
+  -> ZC.WindowBits
+  -> Producer B.ByteString m r
+  -> Producer B.ByteString m r
+compress level config producer = producer ^. compressLens level config
+{-# INLINABLE compress #-}
+
+--------------------------------------------------------------------------------
+
+-- $ccz-re-export
+--
+-- The following are re-exported from "Codec.Compression.Zlib" for your
+-- convenience.
+
+--------------------------------------------------------------------------------
+-- Internal stuff
+type Lens' a b = forall f . Functor f => (b -> f b) -> (a -> f a)
+(^.) :: a -> ((b -> Constant b b) -> (a -> Constant b a)) -> b
+a ^. lens = getConstant (lens Constant a)
+
+-- | Lens to decompress a 'Producer'
+decompressLens
+  :: MonadIO m
+  => ZC.WindowBits
   -> Lens' (Producer B.ByteString m r)
            (Producer B.ByteString m r)
-decompress config k p0 = k $ do
+decompressLens config k p0 = k $ do
       inf <- liftIO $ Z.initInflate config
       go p0 inf
   where
@@ -54,19 +90,16 @@ decompress config k p0 = k $ do
           popper <- liftIO $ Z.feedInflate inf bs
           fromPopper popper
           go p' inf
-{-# INLINABLE decompress #-}
+{-# INLINABLE decompressLens #-}
 
--- | Compress bytes flowing downstream.
---
--- See the "Codec.Compression.Zlib" module for details about
--- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
-compress
+-- | Lens to compress a 'Producer'
+compressLens
   :: MonadIO m
   => ZC.CompressionLevel
   -> ZC.WindowBits
   -> Lens' (Producer B.ByteString m r)
            (Producer B.ByteString m r)
-compress level config k p0 = k $ do
+compressLens level config k p0 = k $ do
       def <- liftIO $ Z.initDeflate level' config
       go p0 def
   where
@@ -82,18 +115,7 @@ compress level config k p0 = k $ do
           popper <- liftIO $ Z.feedDeflate def bs
           fromPopper popper
           go p' def
-{-# INLINABLE compress #-}
-
---------------------------------------------------------------------------------
-
--- $ccz-re-export
---
--- The following are re-exported from "Codec.Compression.Zlib" for your
--- convenience.
-
---------------------------------------------------------------------------------
--- Internal stuff
-type Lens' a b = forall f . Functor f => (b -> f b) -> (a -> f a)
+{-# INLINABLE compressLens #-}
 
 -- | Produce values from the given 'Z.Popper' until exhausted.
 fromPopper :: MonadIO m => Z.Popper -> Producer' B.ByteString m ()
