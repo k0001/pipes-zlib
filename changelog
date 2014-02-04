@@ -1,3 +1,9 @@
+# Version HEAD
+
+* Backwards incompatible API. `compress` and `decompress` are now
+  functions of `Producer'`s as they need to perform actions at the
+  beginning and end of input. (Issue #6)
+
 # Version 0.3.1
 
 * Dependency upper bounds.
