@@ -24,7 +24,9 @@ module Pipes.Zlib (
 
 import qualified Codec.Zlib                as Z
 import qualified Codec.Compression.Zlib    as ZC
-import           Control.Monad             (forever)
+import           Control.Monad             (unless)
+import           Data.Functor.Constant     (Constant(Constant, getConstant))
+import           Data.Foldable             (forM_)
 import           Pipes
 import qualified Data.ByteString           as B
 
@@ -33,16 +35,12 @@ import qualified Data.ByteString           as B
 -- | Decompress bytes flowing downstream.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
-decompress :: MonadIO m => ZC.WindowBits -> Pipe B.ByteString B.ByteString m r
-decompress config = forever $ do
-    inf <- liftIO (Z.initInflate config)
-    a <- awaitNonEmpty
-    popper <- liftIO (Z.feedInflate inf a)
-    fromPopper popper
-    bs <- liftIO (Z.finishInflate inf)
-    if B.null bs
-        then return ()
-        else yield bs
+decompress
+  :: MonadIO m
+  => ZC.WindowBits
+  -> Producer B.ByteString m r
+  -> Producer B.ByteString m r
+decompress config producer = producer ^. decompressLens config
 {-# INLINABLE decompress #-}
 
 -- | Compress bytes flowing downstream.
@@ -51,18 +49,11 @@ decompress config = forever $ do
 -- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
 compress
   :: MonadIO m
-  => ZC.CompressionLevel -> ZC.WindowBits -> Pipe B.ByteString B.ByteString m r
-compress level config = forever $ do
-    def <- liftIO (Z.initDeflate level' config)
-    a <- awaitNonEmpty
-    popper <- liftIO (Z.feedDeflate def a)
-    fromPopper popper
-    mbs <- liftIO (Z.finishDeflate def)
-    case mbs of
-        Just bs -> yield bs
-        Nothing -> return ()
-  where
-    level' = fromCompressionLevel level
+  => ZC.CompressionLevel
+  -> ZC.WindowBits
+  -> Producer B.ByteString m r
+  -> Producer B.ByteString m r
+compress level config producer = producer ^. compressLens level config
 {-# INLINABLE compress #-}
 
 --------------------------------------------------------------------------------
@@ -74,18 +65,59 @@ compress level config = forever $ do
 
 --------------------------------------------------------------------------------
 -- Internal stuff
+type Lens' a b = forall f . Functor f => (b -> f b) -> (a -> f a)
+(^.) :: a -> ((b -> Constant b b) -> (a -> Constant b a)) -> b
+a ^. lens = getConstant (lens Constant a)
 
-awaitNonEmpty :: Monad m => Consumer' B.ByteString m B.ByteString
-awaitNonEmpty = loop
+-- | Lens to decompress a 'Producer'
+decompressLens
+  :: MonadIO m
+  => ZC.WindowBits
+  -> Lens' (Producer B.ByteString m r)
+           (Producer B.ByteString m r)
+decompressLens config k p0 = k $ do
+      inf <- liftIO $ Z.initInflate config
+      go p0 inf
   where
-    loop = do
-        bs <- await
-        if B.null bs
-            then loop
-            else return bs
-{-# INLINABLE awaitNonEmpty #-}
+    go p inf = do
+      ebs <- lift $ next p
+      case ebs of
+        Left   r        -> do
+          bs <- liftIO $ Z.finishInflate inf
+          unless (B.null bs) $ yield bs
+          return r
+        Right (bs, p') -> do
+          popper <- liftIO $ Z.feedInflate inf bs
+          fromPopper popper
+          go p' inf
+{-# INLINABLE decompressLens #-}
 
--- | Produce values from the given 'Z.Poppler' until exhausted.
+-- | Lens to compress a 'Producer'
+compressLens
+  :: MonadIO m
+  => ZC.CompressionLevel
+  -> ZC.WindowBits
+  -> Lens' (Producer B.ByteString m r)
+           (Producer B.ByteString m r)
+compressLens level config k p0 = k $ do
+      def <- liftIO $ Z.initDeflate level' config
+      go p0 def
+  where
+    level' = fromCompressionLevel level
+    go p def = do
+      ebs <- lift $ next p
+      case ebs of
+        Left   r        -> do
+          mbs <- liftIO $ Z.finishDeflate def
+          forM_ mbs yield
+          return r
+        Right (bs, p') -> do
+          popper <- liftIO $ Z.feedDeflate def bs
+          fromPopper popper
+          go p' def
+{-# INLINABLE compressLens #-}
+
+-- | Produce values from the given 'Z.Popper' until exhausted.
 fromPopper :: MonadIO m => Z.Popper -> Producer' B.ByteString m ()
 fromPopper pop = loop
   where
@@ -107,4 +139,3 @@ fromCompressionLevel level = case level of
     ZC.CompressionLevel n
          | n >= 0 && n <= 9 -> fromIntegral n
     _  -> error "CompressLevel must be in the range 1..9"
-
