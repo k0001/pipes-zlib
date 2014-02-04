@@ -22,47 +22,53 @@ module Pipes.Zlib (
   , ZC.windowBits
   ) where
 
-import qualified Codec.Zlib                as Z
 import qualified Codec.Compression.Zlib    as ZC
-import           Control.Monad             (forever)
-import           Pipes
+import qualified Codec.Zlib                as Z
+import           Control.Monad             (unless)
 import qualified Data.ByteString           as B
+import           Pipes
 
 --------------------------------------------------------------------------------
 
--- | Decompress bytes flowing downstream.
+-- | Decompress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
-decompress :: MonadIO m => ZC.WindowBits -> Pipe B.ByteString B.ByteString m r
-decompress config = forever $ do
-    inf <- liftIO (Z.initInflate config)
-    a <- awaitNonEmpty
-    popper <- liftIO (Z.feedInflate inf a)
-    fromPopper popper
-    bs <- liftIO (Z.finishInflate inf)
-    if B.null bs
-        then return ()
-        else yield bs
+decompress
+  :: MonadIO m
+  => ZC.WindowBits
+  -> Producer' B.ByteString m r -- ^ Compressed stream
+  -> Producer' B.ByteString m r -- ^ Decompressed stream
+decompress wbits p0 = do
+    inf <- liftIO $ Z.initInflate wbits
+    r <- for p0 $ \bs -> do
+       popper <- liftIO (Z.feedInflate inf bs)
+       fromPopper popper
+    bs <- liftIO $ Z.finishInflate inf
+    unless (B.null bs) (yield bs)
+    return r
 {-# INLINABLE decompress #-}
 
--- | Compress bytes flowing downstream.
+
+-- | Compress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about
 -- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
 compress
   :: MonadIO m
-  => ZC.CompressionLevel -> ZC.WindowBits -> Pipe B.ByteString B.ByteString m r
-compress level config = forever $ do
-    def <- liftIO (Z.initDeflate level' config)
-    a <- awaitNonEmpty
-    popper <- liftIO (Z.feedDeflate def a)
-    fromPopper popper
-    mbs <- liftIO (Z.finishDeflate def)
+  => ZC.CompressionLevel
+  -> ZC.WindowBits
+  -> Producer' B.ByteString m r -- ^ Decompressed stream
+  -> Producer' B.ByteString m r -- ^ Compressed stream
+compress clevel wbits p0 = do
+    def <- liftIO $ Z.initDeflate (fromCompressionLevel clevel) wbits
+    r <- for p0 $ \bs -> do
+       popper <- liftIO (Z.feedDeflate def bs)
+       fromPopper popper
+    mbs <- liftIO $ Z.finishDeflate def
     case mbs of
-        Just bs -> yield bs
-        Nothing -> return ()
-  where
-    level' = fromCompressionLevel level
+       Just bs -> yield bs
+       Nothing -> return ()
+    return r
 {-# INLINABLE compress #-}
 
 --------------------------------------------------------------------------------
@@ -75,25 +81,14 @@ compress level config = forever $ do
 --------------------------------------------------------------------------------
 -- Internal stuff
 
-awaitNonEmpty :: Monad m => Consumer' B.ByteString m B.ByteString
-awaitNonEmpty = loop
-  where
-    loop = do
-        bs <- await
-        if B.null bs
-            then loop
-            else return bs
-{-# INLINABLE awaitNonEmpty #-}
-
--- | Produce values from the given 'Z.Poppler' until exhausted.
+-- | Produce values from the given 'Z.Popper' until exhausted.
 fromPopper :: MonadIO m => Z.Popper -> Producer' B.ByteString m ()
-fromPopper pop = loop
-  where
+fromPopper pop = loop where
     loop = do
-        mbs <- liftIO pop
-        case mbs of
-            Nothing -> return ()
-            Just bs -> yield bs >> loop
+      mbs <- liftIO pop
+      case mbs of
+         Nothing -> return ()
+         Just bs -> yield bs >> loop
 {-# INLINABLE fromPopper #-}
 
 -- We need this function until the @zlib@ library hides the
@@ -107,4 +102,3 @@ fromCompressionLevel level = case level of
     ZC.CompressionLevel n
          | n >= 0 && n <= 9 -> fromIntegral n
     _  -> error "CompressLevel must be in the range 1..9"
-
