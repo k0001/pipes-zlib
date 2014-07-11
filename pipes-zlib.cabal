@@ -1,5 +1,5 @@
 name:               pipes-zlib
-version:            0.4.0
+version:            0.4.0.1
 license:            BSD3
 license-file:       LICENSE
 Copyright:          Copyright (c) Paolo Capriotti 2012,
@@ -14,7 +14,7 @@ build-type:         Simple
 synopsis:           Zlib compression and decompression for Pipes streams
 description:        Zlib compression and decompression for Pipes streams
 cabal-version:      >=1.8
-extra-source-files: README.md PEOPLE changelog
+extra-source-files: README.md PEOPLE changelog.md
 
 source-repository head
     type: git

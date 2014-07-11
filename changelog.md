@@ -1,8 +1,14 @@
+# Version 0.4.0.1
+
+* Bump upper bound dependency on `transformers`.
+
+
 # Version 0.4.0
 
 * Backwards incompatible API. `compress` and `decompress` are now
   functions of `Producer'`s as they need to perform actions at the
   beginning and end of input. (Issue #3)
+
 
 # Version 0.3.1
 
