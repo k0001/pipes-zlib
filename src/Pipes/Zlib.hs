@@ -64,10 +64,7 @@ compress clevel wbits p0 = do
     r <- for p0 $ \bs -> do
        popper <- liftIO (Z.feedDeflate def bs)
        fromPopper popper
-    mbs <- liftIO $ Z.finishDeflate def
-    case mbs of
-       Just bs -> yield bs
-       Nothing -> return ()
+    fromPopper $ Z.finishDeflate def
     return r
 {-# INLINABLE compress #-}
 
