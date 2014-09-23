@@ -2,6 +2,9 @@
 
 -- | This module exports utilities to compress and decompress @pipes@ streams
 -- using the zlib compression codec.
+--
+-- If you want to compress or decompress GZip streams, use the "Pipes.GZip"
+-- module instead.
 
 module Pipes.Zlib (
   -- * Streams

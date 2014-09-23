@@ -1,3 +1,8 @@
+# Version 0.4.1
+
+* Added `Pipes.GZip` module.
+
+
 # Version 0.4.0.1
 
 * Bump upper bound dependency on `transformers`.

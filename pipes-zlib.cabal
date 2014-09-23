@@ -1,5 +1,5 @@
 name:               pipes-zlib
-version:            0.4.0.1
+version:            0.4.1
 license:            BSD3
 license-file:       LICENSE
 Copyright:          Copyright (c) Paolo Capriotti 2012,
@@ -11,8 +11,8 @@ homepage:           https://github.com/k0001/pipes-zlib
 bug-reports:        https://github.com/k0001/pipes-zlib/issues
 category:           Pipes, Compression
 build-type:         Simple
-synopsis:           Zlib compression and decompression for Pipes streams
-description:        Zlib compression and decompression for Pipes streams
+synopsis:           Zlib and GZip compression and decompression for Pipes streams
+description:        Zlib and GZip compression and decompression for Pipes streams
 cabal-version:      >=1.8
 extra-source-files: README.md PEOPLE changelog.md
 
@@ -23,6 +23,7 @@ source-repository head
 library
     hs-source-dirs:  src
     exposed-modules: Pipes.Zlib
+                     Pipes.GZip
     build-depends:   base             (>= 4.5 && < 5.0)
                    , transformers     (>= 0.2 && < 0.5)
                    , pipes            (>= 4.0 && < 4.2)
