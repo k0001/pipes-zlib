@@ -1,3 +1,8 @@
+# Version 0.4.2.1
+
+* Fix “Codec.Compression.Zlib: premature end of compressed stream” (#13)
+
+
 # Version 0.4.2
 
 * Added the `Pipes/GZip.hs` file that was missing in 0.4.1.
