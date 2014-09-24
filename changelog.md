@@ -1,3 +1,8 @@
+# Version 0.4.2
+
+* Added the `Pipes/GZip.hs` file that was missing in 0.4.1.
+
+
 # Version 0.4.1
 
 * Added `Pipes.GZip` module.
