@@ -1,3 +1,8 @@
+# Version 0.4.3
+
+* Fix usage of the `Producer'` type synonym (#14).
+
+
 # Version 0.4.2.1
 
 * Fix “Codec.Compression.Zlib: premature end of compressed stream” (#13)

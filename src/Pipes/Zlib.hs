@@ -36,11 +36,18 @@ import           Pipes
 -- | Decompress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
+--
+-- @
+-- 'decompress' :: 'MonadIO' m
+--            => 'ZC.WindowBits'
+--            => 'Producer' 'B.ByteString' m r
+--            -> 'Producer' 'B.ByteString' m r
+-- @
 decompress
   :: MonadIO m
   => ZC.WindowBits
-  -> Producer' B.ByteString m r -- ^ Compressed stream
-  -> Producer' B.ByteString m r -- ^ Decompressed stream
+  -> Proxy x' x () B.ByteString m r -- ^ Compressed stream
+  -> Proxy x' x () B.ByteString m r -- ^ Decompressed stream
 decompress wbits p0 = do
     inf <- liftIO $ Z.initInflate wbits
     r <- for p0 $ \bs -> do
@@ -56,12 +63,20 @@ decompress wbits p0 = do
 --
 -- See the "Codec.Compression.Zlib" module for details about
 -- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
+--
+-- @
+-- 'compress' :: 'MonadIO' m
+--          => 'ZC.CompressionLevel'
+--          -> 'ZC.WindowBits'
+--          -> 'Producer' 'B.ByteString' m r
+--          -> 'Producer' 'B.ByteString' m r
+-- @
 compress
   :: MonadIO m
   => ZC.CompressionLevel
   -> ZC.WindowBits
-  -> Producer' B.ByteString m r -- ^ Decompressed stream
-  -> Producer' B.ByteString m r -- ^ Compressed stream
+  -> Proxy x' x () B.ByteString m r -- ^ Decompressed stream
+  -> Proxy x' x () B.ByteString m r -- ^ Compressed stream
 compress clevel wbits p0 = do
     def <- liftIO $ Z.initDeflate (fromCompressionLevel clevel) wbits
     r <- for p0 $ \bs -> do
