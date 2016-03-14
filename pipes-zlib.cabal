@@ -28,6 +28,5 @@ library
                    , transformers     (>= 0.2 && < 0.5)
                    , pipes            (>= 4.0 && < 4.2)
                    , bytestring       (>= 0.9.2.1)
-                   , zlib             (>= 0.5 && < 0.7)
-                   , zlib-bindings    (>= 0.1 && < 0.2)
+                   , streaming-commons(>= 0.1.15 && < 0.2)
     ghc-options: -Wall -O2

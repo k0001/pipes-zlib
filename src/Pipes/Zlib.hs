@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | This module exports utilities to compress and decompress @pipes@ streams
 -- using the zlib compression codec.
@@ -9,24 +10,25 @@
 module Pipes.Zlib (
   -- * Streams
     decompress
+  , decompress'
   , compress
 
-  -- * Compression level
-  -- $ccz-re-export
-  , ZC.defaultCompression
-  , ZC.noCompression
-  , ZC.bestSpeed
-  , ZC.bestCompression
-  , ZC.compressionLevel
+  -- * Compression levels
+  , CompressionLevel
+  , defaultCompression
+  , noCompression
+  , bestSpeed
+  , bestCompression
+  , compressionLevel
 
   -- * Window size
   -- $ccz-re-export
-  , ZC.defaultWindowBits
-  , ZC.windowBits
+  , Z.defaultWindowBits
+  , windowBits
   ) where
 
-import qualified Codec.Compression.Zlib    as ZC
-import qualified Codec.Zlib                as Z
+import           Data.Streaming.Zlib       as Z
+import           Control.Exception         (throwIO)
 import           Control.Monad             (unless)
 import qualified Data.ByteString           as B
 import           Pipes
@@ -45,7 +47,7 @@ import           Pipes
 -- @
 decompress
   :: MonadIO m
-  => ZC.WindowBits
+  => Z.WindowBits
   -> Proxy x' x () B.ByteString m r -- ^ Compressed stream
   -> Proxy x' x () B.ByteString m r -- ^ Decompressed stream
 decompress wbits p0 = do
@@ -58,27 +60,59 @@ decompress wbits p0 = do
     return r
 {-# INLINABLE decompress #-}
 
+-- | Decompress bytes flowing from a 'Producer', returning any leftover input
+-- that follows the compressed stream.
+decompress'
+  :: forall m r. MonadIO m
+  => Z.WindowBits
+  -> Producer B.ByteString m r -- ^ Compressed stream
+  -> Producer B.ByteString m (Either (Producer B.ByteString m r) r)
+     -- ^ Decompressed stream, ending with either leftovers or a result
+decompress' wbits prod = do
+    inf <- liftIO $ Z.initInflate wbits
+
+    let flush = do bs <- liftIO $ Z.flushInflate inf
+                   unless (B.null bs) (yield bs)
+
+        go :: Producer B.ByteString m r
+           -> Producer B.ByteString m (Either (Producer B.ByteString m r) r)
+        go p0 = do
+            res <- lift $ next p0
+            case res of
+                Left r         ->
+                    return $ Right r
+                Right (bs, p1) -> do
+                    popper <- liftIO $ Z.feedInflate inf bs
+                    fromPopper popper
+                    flush
+                    leftover <- liftIO $ Z.getUnusedInflate inf
+                    if B.null leftover
+                        then go p1
+                        else return $ Left (yield leftover >> p1)
+
+    go prod
+{-# INLINABLE decompress' #-}
 
 -- | Compress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about
--- 'ZC.CompressionLevel' and 'ZC.WindowBits'.
+-- 'Z.CompressionLevel' and 'Z.WindowBits'.
 --
 -- @
 -- 'compress' :: 'MonadIO' m
---          => 'ZC.CompressionLevel'
---          -> 'ZC.WindowBits'
+--          => 'Z.CompressionLevel'
+--          -> 'Z.WindowBits'
 --          -> 'Producer' 'B.ByteString' m r
 --          -> 'Producer' 'B.ByteString' m r
 -- @
 compress
   :: MonadIO m
-  => ZC.CompressionLevel
-  -> ZC.WindowBits
+  => CompressionLevel
+  -> Z.WindowBits
   -> Proxy x' x () B.ByteString m r -- ^ Decompressed stream
   -> Proxy x' x () B.ByteString m r -- ^ Compressed stream
-compress clevel wbits p0 = do
-    def <- liftIO $ Z.initDeflate (fromCompressionLevel clevel) wbits
+compress (CompressionLevel clevel) wbits p0 = do
+    def <- liftIO $ Z.initDeflate clevel wbits
     r <- for p0 $ \bs -> do
        popper <- liftIO (Z.feedDeflate def bs)
        fromPopper popper
@@ -94,26 +128,40 @@ compress clevel wbits p0 = do
 -- convenience.
 
 --------------------------------------------------------------------------------
+-- Compression Levels
+
+-- | How hard should we try to compress?
+newtype CompressionLevel = CompressionLevel Int
+                         deriving (Show, Read, Eq, Ord)
+
+defaultCompression, noCompression, bestSpeed, bestCompression :: CompressionLevel
+defaultCompression = CompressionLevel (-1)
+noCompression      = CompressionLevel 0
+bestSpeed          = CompressionLevel 1
+bestCompression    = CompressionLevel 9
+
+-- | A specific compression level between 0 and 9.
+compressionLevel :: Int -> CompressionLevel
+compressionLevel n
+  | n >= 0 && n <= 9 = CompressionLevel n
+  | otherwise        = error "CompressionLevel must be in the range 0..9"
+
+windowBits :: Int -> WindowBits
+windowBits = WindowBits
+
+--------------------------------------------------------------------------------
 -- Internal stuff
 
 -- | Produce values from the given 'Z.Popper' until exhausted.
-fromPopper :: MonadIO m => Z.Popper -> Producer' B.ByteString m ()
-fromPopper pop = loop where
+fromPopper :: MonadIO m
+           => Z.Popper
+           -> Producer' B.ByteString m ()
+fromPopper pop = loop
+  where
     loop = do
       mbs <- liftIO pop
       case mbs of
-         Nothing -> return ()
-         Just bs -> yield bs >> loop
+          PRDone     -> return ()
+          PRError e  -> liftIO $ throwIO e
+          PRNext bs  -> yield bs >> loop
 {-# INLINABLE fromPopper #-}
-
--- We need this function until the @zlib@ library hides the
--- 'ZC.CompressionLevel' constructors in future version 0.7.
-fromCompressionLevel :: ZC.CompressionLevel -> Int
-fromCompressionLevel level = case level of
-    ZC.DefaultCompression   -> -1
-    ZC.NoCompression        -> 0
-    ZC.BestSpeed            -> 1
-    ZC.BestCompression      -> 9
-    ZC.CompressionLevel n
-         | n >= 0 && n <= 9 -> fromIntegral n
-    _  -> error "CompressLevel must be in the range 1..9"
