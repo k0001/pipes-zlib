@@ -1,3 +1,14 @@
+# Version 0.4.4
+
+* Depend on `streaming-commons` instead of `zlib` and `zlib-bindings`,
+  as the latter are deprecated.
+
+* Add `Pipes.Zlib.decompress'` and `Pipes.GZip.decompress'`.
+
+* Bump upper bound dependency on `transformers`.
+
+* Add tests.
+
 # Version 0.4.3
 
 * Fix usage of the `Producer'` type synonym (#14).
