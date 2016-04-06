@@ -41,7 +41,7 @@ import           Pipes
 --
 -- @
 -- 'decompress' :: 'MonadIO' m
---            => 'ZC.WindowBits'
+--            => 'Z.WindowBits'
 --            => 'Producer' 'B.ByteString' m r
 --            -> 'Producer' 'B.ByteString' m r
 -- @
@@ -63,34 +63,27 @@ decompress wbits p0 = do
 -- | Decompress bytes flowing from a 'Producer', returning any leftover input
 -- that follows the compressed stream.
 decompress'
-  :: forall m r. MonadIO m
+  :: MonadIO m
   => Z.WindowBits
   -> Producer B.ByteString m r -- ^ Compressed stream
   -> Producer B.ByteString m (Either (Producer B.ByteString m r) r)
      -- ^ Decompressed stream, ending with either leftovers or a result
-decompress' wbits prod = do
-    inf <- liftIO $ Z.initInflate wbits
-
-    let flush = do bs <- liftIO $ Z.flushInflate inf
-                   unless (B.null bs) (yield bs)
-
-        go :: Producer B.ByteString m r
-           -> Producer B.ByteString m (Either (Producer B.ByteString m r) r)
-        go p0 = do
-            res <- lift $ next p0
-            case res of
-                Left r         ->
-                    return $ Right r
-                Right (bs, p1) -> do
-                    popper <- liftIO $ Z.feedInflate inf bs
-                    fromPopper popper
-                    flush
-                    leftover <- liftIO $ Z.getUnusedInflate inf
-                    if B.null leftover
-                        then go p1
-                        else return $ Left (yield leftover >> p1)
-
-    go prod
+decompress' wbits p0 = go p0 =<< liftIO (Z.initInflate wbits)
+  where
+    flush inf = do
+      bs <- liftIO $ Z.flushInflate inf
+      unless (B.null bs) (yield bs)
+    go p inf = do
+      res <- lift (next p)
+      case res of
+         Left r -> return $ Right r
+         Right (bs, p') -> do
+            fromPopper =<< liftIO (Z.feedInflate inf bs)
+            flush inf
+            leftover <- liftIO $ Z.getUnusedInflate inf
+            if B.null leftover
+               then go p' inf
+               else return $ Left (yield leftover >> p')
 {-# INLINABLE decompress' #-}
 
 -- | Compress bytes flowing from a 'Producer'.
