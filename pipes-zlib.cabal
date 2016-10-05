@@ -13,7 +13,7 @@ category:           Pipes, Compression
 build-type:         Simple
 synopsis:           Zlib and GZip compression and decompression for Pipes streams
 description:        Zlib and GZip compression and decompression for Pipes streams
-cabal-version:      >=1.8
+cabal-version:      >=1.10
 extra-source-files: README.md PEOPLE changelog.md
 
 source-repository head
