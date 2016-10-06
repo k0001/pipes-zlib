@@ -1,3 +1,8 @@
+# Version 0.4.4.1
+
+* Bump upper bound dependency on `pipes`.
+
+
 # Version 0.4.4
 
 * Depend on `streaming-commons` instead of `zlib` and `zlib-bindings`,
@@ -8,6 +13,7 @@
 * Bump upper bound dependency on `transformers`.
 
 * Add tests.
+
 
 # Version 0.4.3
 
