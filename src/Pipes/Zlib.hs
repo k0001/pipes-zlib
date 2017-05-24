@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -27,94 +28,82 @@ module Pipes.Zlib (
   , windowBits
   ) where
 
-import           Data.Streaming.Zlib       as Z
-import           Control.Exception         (throwIO)
-import           Control.Monad             (unless)
-import qualified Data.ByteString           as B
-import           Pipes
+import Data.Function (fix)
+import Data.Streaming.Zlib as Z
+import Control.Exception (throwIO)
+import Control.Monad (unless)
+import qualified Data.ByteString as B
+import Pipes
 
 --------------------------------------------------------------------------------
 
 -- | Decompress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
---
--- @
--- 'decompress' :: 'MonadIO' m
---            => 'Z.WindowBits'
---            => 'Producer' 'B.ByteString' m r
---            -> 'Producer' 'B.ByteString' m r
--- @
 decompress
   :: MonadIO m
   => Z.WindowBits
   -> Producer B.ByteString m r -- ^ Compressed stream
   -> Producer' B.ByteString m r -- ^ Decompressed stream
-decompress wbits p0 = go p0
-  where
-    go p = decompress' wbits p >>= either go return
+decompress wbits = fix $ \k p -> do
+  ebs <- decompress' wbits p
+  either k pure ebs
 {-# INLINABLE decompress #-}
 
 -- | Decompress bytes flowing from a 'Producer', returning any leftover input
 -- that follows the compressed stream.
 decompress'
-  :: MonadIO m
+  :: forall m r
+   . MonadIO m
   => Z.WindowBits
   -> Producer B.ByteString m r -- ^ Compressed stream
   -> Producer' B.ByteString m (Either (Producer B.ByteString m r) r)
-     -- ^ Decompressed stream, ending with either leftovers or a result
+  -- ^ Decompressed stream, ending with either leftovers or a result
 decompress' wbits p0 = do
-          inf <- liftIO $ Z.initInflate wbits
-          res <- go p0 inf
-          bs <- liftIO $ Z.finishInflate inf
-          unless (B.null bs) (yield bs)
-          return res
+    inf <- liftIO (Z.initInflate wbits)
+    res <- go inf p0
+    bs <- liftIO (Z.finishInflate inf)
+    unless (B.null bs) (yield bs)
+    pure res
   where
-    go p inf = do
-      res <- lift (next p)
-      case res of
-         Left r -> return $ Right r
+    go :: Inflate
+       -> Producer B.ByteString m b
+       -> Producer' B.ByteString m (Either (Producer B.ByteString m b) b)
+    go inf = fix $ \k p -> do
+      lift (next p) >>= \case
+         Left r -> pure (Right r)
          Right (bs, p') -> do
-            popper <- liftIO $ Z.feedInflate inf bs
-            fromPopper popper
-            leftover <- liftIO $ Z.getUnusedInflate inf
+            fromPopper =<< liftIO (Z.feedInflate inf bs)
+            leftover <- liftIO (Z.getUnusedInflate inf)
             if B.null leftover
-               then go p' inf
-               else return $ Left (yield leftover >> p')
+               then k p'
+               else pure (Left (yield leftover >> p'))
 {-# INLINABLE decompress' #-}
 
 -- | Compress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about
 -- 'Z.CompressionLevel' and 'Z.WindowBits'.
---
--- @
--- 'compress' :: 'MonadIO' m
---          => 'Z.CompressionLevel'
---          -> 'Z.WindowBits'
---          -> 'Producer' 'B.ByteString' m r
---          -> 'Producer' 'B.ByteString' m r
--- @
 compress
-  :: MonadIO m
+  :: forall m r
+   . MonadIO m
   => CompressionLevel
   -> Z.WindowBits
   -> Producer B.ByteString m r -- ^ Decompressed stream
   -> Producer' B.ByteString m r -- ^ Compressed stream
 compress (CompressionLevel clevel) wbits p0 = do
-          def <- liftIO $ Z.initDeflate clevel wbits
-          res <- go p0 def
-          fromPopper $ Z.finishDeflate def
-          return res
+    def <- liftIO (Z.initDeflate clevel wbits)
+    res <- go def p0
+    fromPopper (Z.finishDeflate def)
+    pure res
   where
-    go p def = do
-      res <- lift (next p)
-      case res of
-         Left r -> return r
+    go :: Deflate -> Producer B.ByteString m b -> Producer' B.ByteString m b
+    go def = fix $ \k p -> do
+      lift (next p) >>= \case
+         Left r -> pure r
          Right (bs, p') -> do
-            popper <- liftIO $ Z.feedDeflate def bs
-            fromPopper popper
-            go p' def
+            fromPopper =<< liftIO (Z.feedDeflate def bs)
+            k p'
 {-# INLINABLE compress #-}
 
 --------------------------------------------------------------------------------
@@ -129,7 +118,7 @@ compress (CompressionLevel clevel) wbits p0 = do
 
 -- | How hard should we try to compress?
 newtype CompressionLevel = CompressionLevel Int
-                         deriving (Show, Read, Eq, Ord)
+  deriving (Show, Read, Eq, Ord)
 
 defaultCompression, noCompression, bestSpeed, bestCompression :: CompressionLevel
 defaultCompression = CompressionLevel (-1)
@@ -150,15 +139,10 @@ windowBits = WindowBits
 -- Internal stuff
 
 -- | Produce values from the given 'Z.Popper' until exhausted.
-fromPopper :: MonadIO m
-           => Z.Popper
-           -> Producer' B.ByteString m ()
-fromPopper pop = loop
-  where
-    loop = do
-      mbs <- liftIO pop
-      case mbs of
-          PRDone     -> return ()
-          PRError e  -> liftIO $ throwIO e
-          PRNext bs  -> yield bs >> loop
+fromPopper :: MonadIO m => Z.Popper -> Proxy x' x () B.ByteString m ()
+fromPopper = \pop -> fix $ \k -> do
+   liftIO pop >>= \case
+      PRDone -> pure ()
+      PRError e -> liftIO (throwIO e)
+      PRNext bs -> yield bs >> k
 {-# INLINABLE fromPopper #-}

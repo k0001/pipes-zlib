@@ -3,8 +3,8 @@
 -- | This module exports utilities to compress and decompress GZip @pipes@
 -- streams.
 
-module Pipes.GZip (
-  -- * Streams
+module Pipes.GZip
+  ( -- * Streams
     decompress
   , decompress'
   , compress
@@ -18,20 +18,14 @@ module Pipes.GZip (
   , Pipes.Zlib.compressionLevel
   ) where
 
-import qualified Data.Streaming.Zlib       as Zlib
-import qualified Data.ByteString           as B
-import           Pipes
+import qualified Data.Streaming.Zlib as Zlib
+import qualified Data.ByteString as B
+import Pipes
 import qualified Pipes.Zlib
 
 --------------------------------------------------------------------------------
 
 -- | Decompress bytes flowing from a 'Producer'.
---
--- @
--- 'decompress' :: 'MonadIO' m
---            => 'Producer' 'B.ByteString' m r
---            -> 'Producer' 'B.ByteString' m r
--- @
 decompress
   :: MonadIO m
   => Producer B.ByteString m r -- ^ Compressed stream
@@ -52,13 +46,6 @@ decompress' = Pipes.Zlib.decompress' gzWindowBits
 
 
 -- | Compress bytes flowing from a 'Producer'.
---
--- @
--- 'compress' :: 'MonadIO' m
---          => 'ZC.CompressionLevel'
---          -> 'Producer' 'B.ByteString' m r
---          -> 'Producer' 'B.ByteString' m r
--- @
 compress
   :: MonadIO m
   => Pipes.Zlib.CompressionLevel
