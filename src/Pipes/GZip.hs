@@ -34,8 +34,8 @@ import qualified Pipes.Zlib
 -- @
 decompress
   :: MonadIO m
-  => Proxy x' x () B.ByteString m r -- ^ Compressed stream
-  -> Proxy x' x () B.ByteString m r -- ^ Decompressed stream
+  => Producer B.ByteString m r -- ^ Compressed stream
+  -> Producer B.ByteString m r -- ^ Decompressed stream
 decompress = Pipes.Zlib.decompress gzWindowBits
 {-# INLINABLE decompress #-}
 
