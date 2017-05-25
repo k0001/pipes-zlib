@@ -35,7 +35,7 @@ import qualified Pipes.Zlib
 decompress
   :: MonadIO m
   => Producer B.ByteString m r -- ^ Compressed stream
-  -> Producer B.ByteString m r -- ^ Decompressed stream
+  -> Producer' B.ByteString m r -- ^ Decompressed stream
 decompress = Pipes.Zlib.decompress gzWindowBits
 {-# INLINABLE decompress #-}
 
@@ -44,7 +44,7 @@ decompress = Pipes.Zlib.decompress gzWindowBits
 decompress'
   :: MonadIO m
   => Producer B.ByteString m r -- ^ Compressed stream
-  -> Producer B.ByteString m (Either (Producer B.ByteString m r) r)
+  -> Producer' B.ByteString m (Either (Producer B.ByteString m r) r)
      -- ^ Decompressed stream, returning either a 'Producer' of the leftover input
      -- or the return value from the input 'Producer'.
 decompress' = Pipes.Zlib.decompress' gzWindowBits
@@ -62,8 +62,8 @@ decompress' = Pipes.Zlib.decompress' gzWindowBits
 compress
   :: MonadIO m
   => Pipes.Zlib.CompressionLevel
-  -> Proxy x' x () B.ByteString m r -- ^ Decompressed stream
-  -> Proxy x' x () B.ByteString m r -- ^ Compressed stream
+  -> Producer B.ByteString m r -- ^ Decompressed stream
+  -> Producer' B.ByteString m r -- ^ Compressed stream
 compress clevel = Pipes.Zlib.compress clevel gzWindowBits
 {-# INLINABLE compress #-}
 
