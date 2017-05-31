@@ -6,6 +6,9 @@
 
 * Add support for concatenated GZip archives.
 
+* `decompress` and `decompress'` now throw exceptions on premature end of input.
+
+* Dependency bump: lower bound on `streaming-commons`.
 
 * Remove version constraints from all dependencies except `base`.
 
