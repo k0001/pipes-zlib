@@ -48,16 +48,11 @@ import           Pipes
 decompress
   :: MonadIO m
   => Z.WindowBits
-  -> Proxy x' x () B.ByteString m r -- ^ Compressed stream
-  -> Proxy x' x () B.ByteString m r -- ^ Decompressed stream
-decompress wbits p0 = do
-    inf <- liftIO $ Z.initInflate wbits
-    r <- for p0 $ \bs -> do
-       popper <- liftIO (Z.feedInflate inf bs)
-       fromPopper popper
-    bs <- liftIO $ Z.finishInflate inf
-    unless (B.null bs) (yield bs)
-    return r
+  -> Producer B.ByteString m r -- ^ Compressed stream
+  -> Producer' B.ByteString m r -- ^ Decompressed stream
+decompress wbits p0 = go p0
+  where
+    go p = decompress' wbits p >>= either go return
 {-# INLINABLE decompress #-}
 
 -- | Decompress bytes flowing from a 'Producer', returning any leftover input
@@ -66,20 +61,22 @@ decompress'
   :: MonadIO m
   => Z.WindowBits
   -> Producer B.ByteString m r -- ^ Compressed stream
-  -> Producer B.ByteString m (Either (Producer B.ByteString m r) r)
+  -> Producer' B.ByteString m (Either (Producer B.ByteString m r) r)
      -- ^ Decompressed stream, ending with either leftovers or a result
-decompress' wbits p0 = go p0 =<< liftIO (Z.initInflate wbits)
+decompress' wbits p0 = do
+          inf <- liftIO $ Z.initInflate wbits
+          res <- go p0 inf
+          bs <- liftIO $ Z.finishInflate inf
+          unless (B.null bs) (yield bs)
+          return res
   where
-    flush inf = do
-      bs <- liftIO $ Z.flushInflate inf
-      unless (B.null bs) (yield bs)
     go p inf = do
       res <- lift (next p)
       case res of
          Left r -> return $ Right r
          Right (bs, p') -> do
-            fromPopper =<< liftIO (Z.feedInflate inf bs)
-            flush inf
+            popper <- liftIO $ Z.feedInflate inf bs
+            fromPopper popper
             leftover <- liftIO $ Z.getUnusedInflate inf
             if B.null leftover
                then go p' inf
@@ -102,15 +99,22 @@ compress
   :: MonadIO m
   => CompressionLevel
   -> Z.WindowBits
-  -> Proxy x' x () B.ByteString m r -- ^ Decompressed stream
-  -> Proxy x' x () B.ByteString m r -- ^ Compressed stream
+  -> Producer B.ByteString m r -- ^ Decompressed stream
+  -> Producer' B.ByteString m r -- ^ Compressed stream
 compress (CompressionLevel clevel) wbits p0 = do
-    def <- liftIO $ Z.initDeflate clevel wbits
-    r <- for p0 $ \bs -> do
-       popper <- liftIO (Z.feedDeflate def bs)
-       fromPopper popper
-    fromPopper $ Z.finishDeflate def
-    return r
+          def <- liftIO $ Z.initDeflate clevel wbits
+          res <- go p0 def
+          fromPopper $ Z.finishDeflate def
+          return res
+  where
+    go p def = do
+      res <- lift (next p)
+      case res of
+         Left r -> return r
+         Right (bs, p') -> do
+            popper <- liftIO $ Z.feedDeflate def bs
+            fromPopper popper
+            go p' def
 {-# INLINABLE compress #-}
 
 --------------------------------------------------------------------------------
