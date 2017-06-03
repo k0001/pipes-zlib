@@ -1,5 +1,12 @@
 # Version HEAD
 
+* BREAKING CHANGE: `compress` and `decompress` now take a `Producer ByteString`
+  instead of a more polymorphic `Proxy x' x () ByteString`. This is necessary in
+  order to properly support concatenated GZip archives.
+
+* Add support for concatenated GZip archives.
+
+
 * Remove version constraints from all dependencies except `base`.
 
 
