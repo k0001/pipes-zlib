@@ -30,9 +30,8 @@ qcProps = testGroup "(checked by QuickCheck)"
      bs' <- B8.concat <$> P.toListM pd
      return (bs QC.=== bs')
 
- , QC.testProperty "id == decompress' . compress" $ \bs bsl0 cl -> QC.ioProperty $ do
-     let bsl = "xxxxx" <> bsl0
-         pc = PZ.compress cl PZ.defaultWindowBits (P.yield bs)
+ , QC.testProperty "id == decompress' . compress" $ \bs bsl cl -> QC.ioProperty $ do
+     let pc = PZ.compress cl PZ.defaultWindowBits (P.yield bs)
          pd = PZ.decompress' PZ.defaultWindowBits (pc >> P.yield bsl)
      (bs', elr) <- first B8.concat <$> P.toListM' pd
      case elr of
@@ -44,29 +43,42 @@ qcProps = testGroup "(checked by QuickCheck)"
  ]
 
 unitTests = testGroup "Unit tests"
-  [ testCase "Zlib compression default" $ do
+  [ testCase "Zlib compression" $ do
       let pc = PZ.compress PZ.defaultCompression PZ.defaultWindowBits
                    (P.yield bsUncompressed)
       bs <- B8.concat <$> P.toListM pc
       bs @?= bsCompressedZlibDefault
-  , testCase "Zlib decompression default" $ do
+  , testCase "Zlib decompression" $ do
       let pd = PZ.decompress PZ.defaultWindowBits (P.yield bsCompressedZlibDefault)
       bs <- B8.concat <$> P.toListM pd
       bs @?= bsUncompressed
-  , testCase "GZip compression default" $ do
+  , testCase "GZip compression" $ do
       let pd = PGZ.compress PGZ.defaultCompression (P.yield bsUncompressed)
       bs <- B8.concat <$> P.toListM pd
       bs @?= bsCompressedGZipDefault
-  , testCase "GZip decompression default" $ do
+  , testCase "GZip decompression" $ do
       let pd = PGZ.decompress (P.yield bsCompressedGZipDefault)
       bs <- B8.concat <$> P.toListM pd
       bs @?= bsUncompressed
-  , testCase "Concatenated GZip decompression default" $ do
+  , testCase "Concatenated GZip decompression" $ do
       let pd = PGZ.decompress $ do
                  P.yield bsCompressedGZipDefault
                  P.yield bsCompressedGZipDefault
       bs <- B8.concat <$> P.toListM pd
       bs @?= (bsUncompressed <> bsUncompressed)
+  , testCase "Concatenated GZip decompression with leftovers" $ do
+      let bsl = "xxxxx"
+          pd = PGZ.decompress' $ do
+                 P.yield bsCompressedGZipDefault
+                 P.yield bsCompressedGZipDefault
+                 P.yield bsl
+      (bs, elr) <- first B8.concat <$> P.toListM' pd
+      bs @?= (bsUncompressed <> bsUncompressed)
+      case elr of
+         Right () -> error "unexpected"
+         Left pl -> do
+            bsl' <- B8.concat <$> P.toListM pl
+            bsl' @?= bsl
   ]
 
 bsUncompressed :: B8.ByteString
