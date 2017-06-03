@@ -1,12 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-import           Control.Arrow
+import Control.Arrow
 import qualified Data.ByteString.Char8 as B8
-import           Data.List
-import           Data.Ord
-import           Test.Tasty
-import           Test.Tasty.QuickCheck as QC
-import           Test.QuickCheck.Instances ()
-import           Test.Tasty.HUnit
+import Data.List
+import Data.Monoid ((<>))
+import Data.Ord
+import Test.Tasty
+import Test.Tasty.QuickCheck as QC
+import Test.QuickCheck.Instances ()
+import Test.Tasty.HUnit
 
 import qualified Pipes as P
 import qualified Pipes.Prelude as P
@@ -23,14 +24,15 @@ properties :: TestTree
 properties = testGroup "Properties" [qcProps]
 
 qcProps = testGroup "(checked by QuickCheck)"
- [ QC.testProperty "id == decompress . compress" $ \bs -> QC.ioProperty $ do
-     let pc = PZ.compress PZ.defaultCompression PZ.defaultWindowBits (P.yield bs)
+ [ QC.testProperty "id == decompress . compress" $ \bs cl -> QC.ioProperty $ do
+     let pc = PZ.compress cl PZ.defaultWindowBits (P.yield bs)
          pd = PZ.decompress PZ.defaultWindowBits pc
      bs' <- B8.concat <$> P.toListM pd
      return (bs QC.=== bs')
 
- , QC.testProperty "id == decompress' . compress" $ \bs bsl -> QC.ioProperty $ do
-     let pc = PZ.compress PZ.defaultCompression PZ.defaultWindowBits (P.yield bs)
+ , QC.testProperty "id == decompress' . compress" $ \bs bsl0 cl -> QC.ioProperty $ do
+     let bsl = "xxxxx" <> bsl0
+         pc = PZ.compress cl PZ.defaultWindowBits (P.yield bs)
          pd = PZ.decompress' PZ.defaultWindowBits (pc >> P.yield bsl)
      (bs', elr) <- first B8.concat <$> P.toListM' pd
      case elr of
@@ -48,8 +50,7 @@ unitTests = testGroup "Unit tests"
       bs <- B8.concat <$> P.toListM pc
       bs @?= bsCompressedZlibDefault
   , testCase "Zlib decompression default" $ do
-      let pd = PZ.decompress PZ.defaultWindowBits
-                   (P.yield bsCompressedZlibDefault)
+      let pd = PZ.decompress PZ.defaultWindowBits (P.yield bsCompressedZlibDefault)
       bs <- B8.concat <$> P.toListM pd
       bs @?= bsUncompressed
   , testCase "GZip compression default" $ do
@@ -60,6 +61,12 @@ unitTests = testGroup "Unit tests"
       let pd = PGZ.decompress (P.yield bsCompressedGZipDefault)
       bs <- B8.concat <$> P.toListM pd
       bs @?= bsUncompressed
+  , testCase "Concatenated GZip decompression default" $ do
+      let pd = PGZ.decompress $ do
+                 P.yield bsCompressedGZipDefault
+                 P.yield bsCompressedGZipDefault
+      bs <- B8.concat <$> P.toListM pd
+      bs @?= (bsUncompressed <> bsUncompressed)
   ]
 
 bsUncompressed :: B8.ByteString
@@ -71,3 +78,7 @@ bsCompressedZlibDefault = "x\156K\203\207\a\NUL\STX\130\SOHE"
 bsCompressedGZipDefault :: B8.ByteString
 bsCompressedGZipDefault =
   "\US\139\b\NUL\NUL\NUL\NUL\NUL\NUL\ETXK\203\207\a\NUL!es\140\ETX\NUL\NUL\NUL"
+
+instance QC.Arbitrary PZ.CompressionLevel where
+  arbitrary = PZ.compressionLevel <$> fmap (flip mod 10) QC.arbitrary
+
