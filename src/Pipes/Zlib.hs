@@ -28,7 +28,7 @@ module Pipes.Zlib (
   , windowBits
 
   -- * Exceptions
-  , Err_Decompress(..)
+  , UnexpectedEndOfInput(..)
   ) where
 
 import Data.Function (fix)
@@ -40,8 +40,8 @@ import Pipes
 
 --------------------------------------------------------------------------------
 
-data Err_Decompress = UnexpectedEndOfInput deriving (Eq, Show)
-instance Exception Err_Decompress
+data UnexpectedEndOfInput = UnexpectedEndOfInput deriving (Eq, Show)
+instance Exception UnexpectedEndOfInput
 
 -- | Decompress bytes flowing from a 'Producer'.
 --
