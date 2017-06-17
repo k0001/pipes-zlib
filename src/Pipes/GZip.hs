@@ -18,6 +18,7 @@ module Pipes.GZip
   , Pipes.Zlib.compressionLevel
   ) where
 
+import Data.Function (fix)
 import qualified Data.Streaming.Zlib as Zlib
 import qualified Data.ByteString as B
 import Pipes
@@ -26,15 +27,24 @@ import qualified Pipes.Zlib
 --------------------------------------------------------------------------------
 
 -- | Decompress bytes flowing from a 'Producer'.
+--
+-- Throws 'UnexpectedEndOfInput' if the compressed stream ends prematurely.
 decompress
   :: MonadIO m
   => Producer B.ByteString m r -- ^ Compressed stream
   -> Producer' B.ByteString m r -- ^ Decompressed stream
-decompress = Pipes.Zlib.decompress gzWindowBits
+decompress = fix $ \k p -> do
+  ebs <- decompress' p
+  either k pure ebs
 {-# INLINABLE decompress #-}
 
 -- | Decompress bytes flowing from a 'Producer', returning any leftover input
 -- that follows the compressed stream.
+--
+-- The gzip format allows a single archive to be made up of several smaller
+-- archives concatenated together.  In such cases this function decompresses
+-- only the first archive encountered: further archives, if any, remain in the
+-- leftover input.
 decompress'
   :: MonadIO m
   => Producer B.ByteString m r -- ^ Compressed stream

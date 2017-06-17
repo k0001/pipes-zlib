@@ -73,12 +73,12 @@ unitTests = testGroup "Unit tests"
                  P.yield bsCompressedGZipDefault
                  P.yield bsl
       (bs, elr) <- first B8.concat <$> P.toListM' pd
-      bs @?= (bsUncompressed <> bsUncompressed)
+      bs @?= bsUncompressed
       case elr of
          Right () -> error "unexpected"
          Left pl -> do
             bsl' <- B8.concat <$> P.toListM pl
-            bsl' @?= bsl
+            bsl' @?= bsCompressedGZipDefault <> bsl
   ]
 
 bsUncompressed :: B8.ByteString

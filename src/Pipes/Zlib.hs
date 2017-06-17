@@ -28,7 +28,7 @@ module Pipes.Zlib (
   , windowBits
 
   -- * Exceptions
-  , UnexpectedEndOfInput(..)
+  , Err_Decompress(..)
   ) where
 
 import Data.Function (fix)
@@ -40,22 +40,24 @@ import Pipes
 
 --------------------------------------------------------------------------------
 
-data UnexpectedEndOfInput = UnexpectedEndOfInput deriving (Eq, Show)
-instance Exception UnexpectedEndOfInput
+data Err_Decompress = UnexpectedEndOfInput | UnexpectedLeftovers deriving (Eq, Show)
+instance Exception Err_Decompress
 
 -- | Decompress bytes flowing from a 'Producer'.
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
 --
--- Throws 'UnexpectedEndOfInput' if the compressed Gzip stream ends prematurely.
+-- Throws 'UnexpectedEndOfInput' if the compressed stream ends prematurely.
+-- Throws 'UnexpectedLeftovers' if the compressed stream is not completely
+-- consumed by decompression.
 decompress
   :: MonadIO m
   => Z.WindowBits
   -> Producer B.ByteString m r -- ^ Compressed stream
   -> Producer' B.ByteString m r -- ^ Decompressed stream
-decompress wbits = fix $ \k p -> do
-  ebs <- decompress' wbits p
-  either k pure ebs
+decompress wbits p = decompress' wbits p >>= \case
+  Left _ -> liftIO (throwIO UnexpectedLeftovers)
+  Right r -> pure r
 {-# INLINABLE decompress #-}
 
 -- | Decompress bytes flowing from a 'Producer', returning any leftover input
@@ -63,7 +65,7 @@ decompress wbits = fix $ \k p -> do
 --
 -- See the "Codec.Compression.Zlib" module for details about 'Z.WindowBits'.
 --
--- Throws 'UnexpectedEndOfInput' if the compressed Gzip stream ends prematurely.
+-- Throws 'UnexpectedEndOfInput' if the compressed stream ends prematurely.
 decompress'
   :: forall m r
    . MonadIO m
