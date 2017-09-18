@@ -68,7 +68,7 @@ unitTests = testGroup "Unit tests"
       bs @?= (bsUncompressed <> bsUncompressed)
   , testCase "Concatenated GZip decompression with leftovers" $ do
       let bsl = "xxxxx"
-          pd = PGZ.decompress' $ do
+          pd = PGZ.decompressMember $ do
                  P.yield bsCompressedGZipDefault
                  P.yield bsCompressedGZipDefault
                  P.yield bsl

@@ -6,7 +6,7 @@
 module Pipes.GZip
   ( -- * Streams
     decompress
-  , decompress'
+  , decompressMember
   , compress
 
   -- * Compression level
@@ -34,25 +34,25 @@ decompress
   => Producer B.ByteString m r -- ^ Compressed stream
   -> Producer' B.ByteString m r -- ^ Decompressed stream
 decompress = fix $ \k p -> do
-  ebs <- decompress' p
+  ebs <- decompressMember p
   either k pure ebs
 {-# INLINABLE decompress #-}
 
 -- | Decompress bytes flowing from a 'Producer', returning any leftover input
--- that follows the compressed stream.
+-- that follows the first member of the compressed stream.
 --
 -- The gzip format allows a single archive to be made up of several smaller
--- archives concatenated together.  In such cases this function decompresses
--- only the first archive encountered: further archives, if any, remain in the
--- leftover input.
-decompress'
+-- archives ("members") concatenated together.  In such cases this function
+-- decompresses only the first member encountered: further members, if any,
+-- remain in the leftover input.
+decompressMember
   :: MonadIO m
   => Producer B.ByteString m r -- ^ Compressed stream
   -> Producer' B.ByteString m (Either (Producer B.ByteString m r) r)
      -- ^ Decompressed stream, returning either a 'Producer' of the leftover input
      -- or the return value from the input 'Producer'.
-decompress' = Pipes.Zlib.decompress' gzWindowBits
-{-# INLINABLE decompress' #-}
+decompressMember = Pipes.Zlib.decompress' gzWindowBits
+{-# INLINABLE decompressMember #-}
 
 
 -- | Compress bytes flowing from a 'Producer'.
