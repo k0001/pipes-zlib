@@ -6,7 +6,7 @@
 module Pipes.GZip
   ( -- * Streams
     decompress
-  , decompress'
+  , decompressMember
   , compress
 
   -- * Compression level
@@ -18,6 +18,7 @@ module Pipes.GZip
   , Pipes.Zlib.compressionLevel
   ) where
 
+import Data.Function (fix)
 import qualified Data.Streaming.Zlib as Zlib
 import qualified Data.ByteString as B
 import Pipes
@@ -26,23 +27,32 @@ import qualified Pipes.Zlib
 --------------------------------------------------------------------------------
 
 -- | Decompress bytes flowing from a 'Producer'.
+--
+-- Throws 'UnexpectedEndOfInput' if the compressed stream ends prematurely.
 decompress
   :: MonadIO m
   => Producer B.ByteString m r -- ^ Compressed stream
   -> Producer' B.ByteString m r -- ^ Decompressed stream
-decompress = Pipes.Zlib.decompress gzWindowBits
+decompress = fix $ \k p -> do
+  ebs <- decompressMember p
+  either k pure ebs
 {-# INLINABLE decompress #-}
 
 -- | Decompress bytes flowing from a 'Producer', returning any leftover input
--- that follows the compressed stream.
-decompress'
+-- that follows the first member of the compressed stream.
+--
+-- The gzip format allows a single archive to be made up of several smaller
+-- archives ("members") concatenated together.  In such cases this function
+-- decompresses only the first member encountered: further members, if any,
+-- remain in the leftover input.
+decompressMember
   :: MonadIO m
   => Producer B.ByteString m r -- ^ Compressed stream
   -> Producer' B.ByteString m (Either (Producer B.ByteString m r) r)
      -- ^ Decompressed stream, returning either a 'Producer' of the leftover input
      -- or the return value from the input 'Producer'.
-decompress' = Pipes.Zlib.decompress' gzWindowBits
-{-# INLINABLE decompress' #-}
+decompressMember = Pipes.Zlib.decompress' gzWindowBits
+{-# INLINABLE decompressMember #-}
 
 
 -- | Compress bytes flowing from a 'Producer'.

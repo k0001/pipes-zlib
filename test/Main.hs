@@ -68,17 +68,17 @@ unitTests = testGroup "Unit tests"
       bs @?= (bsUncompressed <> bsUncompressed)
   , testCase "Concatenated GZip decompression with leftovers" $ do
       let bsl = "xxxxx"
-          pd = PGZ.decompress' $ do
+          pd = PGZ.decompressMember $ do
                  P.yield bsCompressedGZipDefault
                  P.yield bsCompressedGZipDefault
                  P.yield bsl
       (bs, elr) <- first B8.concat <$> P.toListM' pd
-      bs @?= (bsUncompressed <> bsUncompressed)
+      bs @?= bsUncompressed
       case elr of
          Right () -> error "unexpected"
          Left pl -> do
             bsl' <- B8.concat <$> P.toListM pl
-            bsl' @?= bsl
+            bsl' @?= bsCompressedGZipDefault <> bsl
   ]
 
 bsUncompressed :: B8.ByteString

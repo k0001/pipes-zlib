@@ -1,5 +1,8 @@
 # Version HEAD
 
+* BREAKING CHANGE: `GZip.decompress'` is renamed to `GZip.decompressMember` -
+  because that's what it actually does.
+
 * BREAKING CHANGE: `compress` and `decompress` now take a `Producer ByteString`
   instead of a more polymorphic `Proxy x' x () ByteString`. This is necessary in
   order to properly support concatenated GZip archives.
