@@ -35,7 +35,9 @@ decompress
   -> Producer' B.ByteString m r -- ^ Decompressed stream
 decompress = fix $ \k p -> do
   ebs <- decompressMember p
-  either k pure ebs
+  case ebs of
+    Right s -> pure s
+    Left  b -> k b
 {-# INLINABLE decompress #-}
 
 -- | Decompress bytes flowing from a 'Producer', returning any leftover input

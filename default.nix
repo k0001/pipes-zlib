@@ -3,8 +3,8 @@
 
 let
 pkgs = import nixpkgs {};
-ghc841 = pkgs.haskell.packages.ghc841.override {
+ghc921 = pkgs.haskell.packages.ghc921.override {
   packageSetConfig = import ./hs-overlay.nix;
 };
 
-in { inherit (ghc841) pipes-zlib; }
+in { inherit (ghc921) pipes-zlib; }

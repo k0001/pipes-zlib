@@ -16,6 +16,11 @@
 * Remove version constraints from all dependencies except `base`.
 
 
+# Version 0.4.4.2
+
+* Remove upper bound from all dependencies except `base`.
+
+
 # Version 0.4.4.1
 
 * Bump upper bound dependency on `pipes`.
